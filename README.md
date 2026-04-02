@@ -15,90 +15,33 @@
 
 </div>
 
-## Features
-
-- **CASP16**: 2nd place in the prestigious CASP16 ligand affinity prediction challenge
-- **High Accuracy**: Graph Neural Network-based architecture for precise binding affinity prediction
-- **Research Ready**: Pre-trained models ready for immediate use
-- **Easy Integration**: Simple Python API and command-line interface
-- **Scalable**: Batch processing for high-throughput screening
-
 ## Quick Start
-
-### Installation
-
-Choose your preferred installation method:
-
-<details>
-<summary><b>Option 1: Install from PyPI (Simplest)</b></summary>
 
 ```bash
 pip install bapred
 ```
 
-</details>
-
-<details>
-<summary><b>Option 2: Using Conda (Recommended for Development)</b></summary>
-
-```bash
-git clone https://github.com/eightmm/BA-Pred.git
-cd BA-Pred
-conda env create -f env.yaml
-conda activate BAPred
-pip install -e .
-```
-
-</details>
-
-<details>
-<summary><b>Option 3: From Source</b></summary>
-
-```bash
-git clone https://github.com/eightmm/BA-Pred.git
-cd BA-Pred
-pip install -r requirements.txt
-pip install -e .
-```
-
-</details>
-
-### Run Your First Prediction
+Run a prediction:
 
 ```bash
 python run_inference.py -r example/1KLT.pdb -l example/ligands.sdf -o results.csv
 ```
 
-That's it! Your binding affinity predictions will be saved in `results.csv`.
+Predictions will be saved in `results.csv`.
 
-## Usage Examples
+## Usage
 
-### Basic Usage
+CLI:
+
 ```bash
-# Predict binding affinities
-python run_inference.py -r example/1KLT.pdb -l example/ligands.sdf -o results.csv
+python run_inference.py -r protein.pdb -l ligands.sdf -o results.csv
 ```
 
-### Advanced Options
-```bash
-# Use CPU instead of GPU
-python run_inference.py -r protein.pdb -l ligands.sdf -o results.csv --device cpu
+Python API:
 
-# Custom batch size for memory optimization
-python run_inference.py -r protein.pdb -l ligands.sdf -o results.csv --batch_size 64
-
-# Limit CPU workers for data loading
-python run_inference.py -r protein.pdb -l ligands.sdf -o results.csv --ncpu 8
-
-# Specify custom model path
-python run_inference.py -r protein.pdb -l ligands.sdf -o results.csv --model_path /path/to/model
-```
-
-### Python API
 ```python
 from bapred.inference import inference
 
-# Run prediction programmatically
 inference(
     protein_pdb="example/1KLT.pdb",
     ligand_file="example/ligands.sdf",
@@ -165,12 +108,6 @@ If you use BA-Pred in your research, please cite the paper:
   url={https://doi.org/10.1021/acs.jcim.5c02591}
 }
 ```
-
-## Support
-
-- **Documentation**: Check this README and code comments
-- **Issues**: [GitHub Issues](https://github.com/eightmm/BA-Pred/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/eightmm/BA-Pred/discussions)
 
 ---
 
