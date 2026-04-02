@@ -17,7 +17,6 @@ class PredictionPKD(nn.Module):
         pose_size,
         num_layers,
         dropout_ratio=0.15,
-        use_mha=True,
     ):
         super(PredictionPKD, self).__init__()
         self.protein_node_encoder = nn.Linear( in_size, emb_size )
@@ -38,8 +37,7 @@ class PredictionPKD(nn.Module):
                 [
                     GraphGPS(
                         emb_size,
-                        4,
-                        use_mha=use_mha,
+                        4
                     )
                     for _ in range(num_layers)
                 ]

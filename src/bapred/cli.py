@@ -16,7 +16,6 @@ def build_parser() -> argparse.ArgumentParser:
             "  bapred -r protein.pdb -l ligands.sdf -o results.tsv\n"
             "  bapred -r protein.pdb -l ligands.sdf -o results.tsv --device cpu\n"
             "  bapred -r protein.pdb -l ligands.sdf -o results.tsv --model random_seed1\n"
-            "  bapred -r protein.pdb -l ligands.sdf -o results.tsv --use-mha\n"
             "  python scripts/run_inference.py -r example/1KLT.pdb "
             "-l example/ligands.sdf -o results.tsv"
         ),
@@ -44,11 +43,6 @@ def build_parser() -> argparse.ArgumentParser:
         type=str,
         default=None,
         help="Optional checkpoint file or directory. Overrides --model when set.",
-    )
-    parser.add_argument(
-        "--use-mha",
-        action="store_true",
-        help="Enable the MHA path during inference. Disabled by default.",
     )
     return parser
 
@@ -95,7 +89,6 @@ def main(argv: list[str] | None = None) -> None:
     logger.info("Batch size: %s", args.batch_size)
     logger.info("Device: %s", device)
     logger.info("Model preset: %s", args.model)
-    logger.info("Use MHA: %s", args.use_mha)
     logger.info("-" * 50)
 
     try:
@@ -107,7 +100,6 @@ def main(argv: list[str] | None = None) -> None:
             model=args.model,
             model_path=args.model_path,
             device=device,
-            use_mha=args.use_mha,
         )
     except Exception as exc:
         logger.error("Error during inference: %s", exc)
