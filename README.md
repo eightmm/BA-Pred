@@ -27,8 +27,6 @@ Run a prediction:
 bapred -r protein.pdb -l ligands.sdf -o results.tsv
 ```
 
-By default, the installed CLI uses the packaged `random_seed0` checkpoint.
-During inference, the MHA path is skipped automatically in `eval()` mode.
 Predictions will be saved in `results.tsv`.
 
 ## Usage
@@ -39,16 +37,16 @@ Installed CLI:
 bapred -r protein.pdb -l ligands.sdf -o results.tsv
 ```
 
-Choose another packaged random checkpoint:
+Use a different weight:
 
 ```bash
-bapred -r protein.pdb -l ligands.sdf -o results.tsv --model random_seed1
+bapred -r protein.pdb -l ligands.sdf -o results.tsv --weight /path/to/checkpoint.pth
 ```
 
 From a source checkout:
 
 ```bash
-python scripts/run_inference.py -r example/1KLT.pdb -l example/ligands.sdf -o results.tsv
+python -m bapred.inference -r example/1KLT.pdb -l example/ligands.sdf -o results.tsv
 ```
 
 Python API:
@@ -61,7 +59,6 @@ inference(
     ligand_file="example/ligands.sdf",
     output="results.tsv",
     batch_size=128,
-    model="random_seed0",
     device="cuda",
 )
 ```
@@ -74,18 +71,14 @@ BA-Pred/
 │   └── bapred/            # Main package
 │       ├── data/          # Data processing modules
 │       ├── model/         # Neural network models
-│       ├── weight/        # Packaged model weights and presets
-│       ├── weights.py     # Checkpoint preset definitions
-│       ├── cli.py         # Installed CLI entry point
-│       └── inference.py   # Inference engine
+│       ├── weight/        # Packaged model weights
+│       └── inference.py   # Inference engine + CLI
 ├── example/               # Example files
-│   ├── 1KLT.pdb             # Sample protein structure
-│   └── ligands.sdf          # Sample ligand library
-├── scripts/
-│   └── run_inference.py   # Source-tree inference wrapper
-├── requirements.txt       # Python dependencies
+│   ├── 1KLT.pdb          # Sample protein structure
+│   ├── ligands.sdf        # Sample ligand library
+│   └── run.sh            # Example inference script
 ├── pyproject.toml         # Package configuration
-└── README.md            # You are here!
+└── README.md
 ```
 
 ## Input/Output Formats

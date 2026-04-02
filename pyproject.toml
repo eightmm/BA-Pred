@@ -35,7 +35,7 @@ classifiers = [
 ]
 
 [project.scripts]
-bapred = "bapred.cli:main"
+bapred = "bapred.inference:main"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
@@ -46,6 +46,5 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 bapred = [
-  "weight/BAPred.pth",
-  "weight/random/*.pth"
+  "weight/random/*.pth",
 ]

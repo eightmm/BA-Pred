@@ -1,82 +1,38 @@
-"""Inference helpers for BA-Pred."""
-
+import os
 from pathlib import Path
-import random
-from typing import Union
 
-import numpy as np
-import pandas as pd
 import torch
-from dgl.dataloading import GraphDataLoader
+import pandas as pd
 from tqdm import tqdm
+from dgl.dataloading import GraphDataLoader
 
 from bapred.data.data import BAPredDataset
 from bapred.model.model import PredictionPKD
-from bapred.weights import DEFAULT_MODEL, resolve_packaged_weight
 
 
-DEFAULT_SEED = 42
+WEIGHT_DIR = Path(__file__).resolve().parent / "weight"
+DEFAULT_WEIGHT = str(WEIGHT_DIR / "random" / "cutoff8_seed0_best.pth")
 
 
-def _set_reproducible_seed(seed: int = DEFAULT_SEED) -> None:
-    torch.manual_seed(seed)
-    np.random.seed(seed)
-    random.seed(seed)
-
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
-
-
-def _resolve_weight_file(model: str, model_path: str | None) -> Path:
-    if model_path is not None:
-        candidate = Path(model_path)
-        return candidate / "BAPred.pth" if candidate.is_dir() else candidate
-    return resolve_packaged_weight(model)
-
-
-def inference(
-    protein_pdb: str,
-    ligand_file: str,
-    output: str,
-    batch_size: int,
-    model: str = DEFAULT_MODEL,
-    model_path: str | None = None,
-    device: Union[str, torch.device] = "cpu",
-) -> None:
-    _set_reproducible_seed()
-
-    resolved_device = torch.device(device)
+def inference(protein_pdb, ligand_file, output, batch_size, weight=DEFAULT_WEIGHT, device='cpu'):
     dataset = BAPredDataset(protein_pdb=protein_pdb, ligand_file=ligand_file)
-    loader = GraphDataLoader(
-        dataset,
-        batch_size=batch_size,
-        shuffle=False,
-        pin_memory=resolved_device.type != "cpu",
-        num_workers=0,
-    )
+    loader = GraphDataLoader(dataset, batch_size=batch_size, shuffle=False, pin_memory=True)
 
-    model = PredictionPKD(57, 256, 13, 25, 20, 6, 0.2).to(resolved_device)
-    weight_path = _resolve_weight_file(model, model_path)
-    checkpoint = torch.load(weight_path, map_location=resolved_device, weights_only=False)
-    model.load_state_dict(checkpoint["model_state_dict"])
+    model = PredictionPKD(57, 256, 13, 25, 20, 6, 0.2).to(device)
+    model.load_state_dict(torch.load(weight, map_location=device, weights_only=False)['model_state_dict'])
     model.eval()
 
     results = {"Name": [], "pKd": [], "Kcal/mol": []}
 
     with torch.no_grad():
-        progress_bar = tqdm(total=len(loader.dataset), unit="ligand")
+        progress_bar = tqdm(total=len(loader.dataset), unit='ligand')
 
         for data in loader:
             bgp, bgl, bgc, error, idx, name = data
-            bgp = bgp.to(resolved_device)
-            bgl = bgl.to(resolved_device)
-            bgc = bgc.to(resolved_device)
+            bgp, bgl, bgc = bgp.to(device), bgl.to(device), bgc.to(device)
 
             pkd = model(bgp, bgl, bgc).view(-1)
-            pkd[error == 1] = float("nan")
+            pkd[error == 1] = float('nan')
 
             results["Name"].extend(str(item) for item in name)
             results["pKd"].extend(pkd.tolist())
@@ -86,4 +42,79 @@ def inference(
         progress_bar.close()
 
     df = pd.DataFrame(results).round(4)
-    df.to_csv(output, sep="\t", na_rep="NaN", index=False)
+    df.to_csv(output, sep='\t', na_rep='NaN', index=False)
+
+
+def main():
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description='BA-Pred: Predict protein-ligand binding affinity using Graph Neural Networks'
+    )
+    parser.add_argument(
+        '-r', '--protein_pdb',
+        required=True,
+        help='Receptor protein PDB file'
+    )
+    parser.add_argument(
+        '-l', '--ligand_file',
+        required=True,
+        help='Ligand file (.sdf, .mol2, or .txt list)'
+    )
+    parser.add_argument(
+        '-o', '--output',
+        default='./result.tsv',
+        help='Output results file (default: result.tsv)'
+    )
+    parser.add_argument(
+        '--batch_size',
+        default=128,
+        type=int,
+        help='Batch size for inference (default: 128)'
+    )
+    parser.add_argument(
+        '--ncpu',
+        default=4,
+        type=int,
+        help='Number of CPU workers (default: 4)'
+    )
+    parser.add_argument(
+        '--device',
+        type=str,
+        default='cuda',
+        choices=['cpu', 'cuda'],
+        help='Compute device: cpu or cuda (default: cuda)'
+    )
+    parser.add_argument(
+        '--weight',
+        type=str,
+        default=DEFAULT_WEIGHT,
+        help='Model weight file (default: packaged cutoff8_seed0)'
+    )
+
+    args = parser.parse_args()
+
+    os.environ["OMP_NUM_THREADS"] = str(args.ncpu)
+    os.environ["MKL_NUM_THREADS"] = str(args.ncpu)
+    torch.set_num_threads(args.ncpu)
+
+    if args.device == 'cpu':
+        device = torch.device("cpu")
+    else:
+        if torch.cuda.is_available():
+            device = torch.device("cuda")
+        else:
+            device = torch.device("cpu")
+
+    inference(
+        protein_pdb=args.protein_pdb,
+        ligand_file=args.ligand_file,
+        output=args.output,
+        batch_size=args.batch_size,
+        weight=args.weight,
+        device=device
+    )
+
+
+if __name__ == "__main__":
+    main()
