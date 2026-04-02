@@ -166,17 +166,6 @@ If you use BA-Pred in your research, please cite the paper:
 }
 ```
 
-If you want to cite the software repository as well, use:
-
-```bibtex
-@software{bapred2024,
-  title={BA-Pred: Protein-Ligand Binding Affinity Prediction using Graph Neural Networks},
-  author={Jaemin Sim},
-  year={2024},
-  url={https://github.com/eightmm/BA-Pred}
-}
-```
-
 ## Support
 
 - **Documentation**: Check this README and code comments
