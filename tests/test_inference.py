@@ -4,18 +4,19 @@ Unit tests for BA-Pred inference module
 import unittest
 import os
 import sys
-import tempfile
 from pathlib import Path
 
-# Add parent directory to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Add src directory to path for local tests
+REPO_ROOT = Path(__file__).resolve().parents[1]
+SRC_DIR = REPO_ROOT / "src"
+sys.path.insert(0, str(SRC_DIR))
 
 class TestInference(unittest.TestCase):
     """Test cases for inference functionality"""
     
     def setUp(self):
         """Set up test fixtures"""
-        self.test_dir = Path(__file__).parent.parent
+        self.test_dir = REPO_ROOT
         self.example_dir = self.test_dir / "example"
         self.protein_pdb = str(self.example_dir / "1KLT.pdb")
         self.ligand_file = str(self.example_dir / "ligands.sdf")
@@ -37,7 +38,7 @@ class TestInference(unittest.TestCase):
     
     def test_model_weights_exist(self):
         """Test that model weights exist"""
-        weight_path = self.test_dir / "bapred" / "weight" / "BAPred.pth"
+        weight_path = self.test_dir / "src" / "bapred" / "weight" / "BAPred.pth"
         self.assertTrue(weight_path.exists(), 
                        f"Model weights not found: {weight_path}")
     
@@ -45,7 +46,7 @@ class TestInference(unittest.TestCase):
         """Test CLI help command"""
         import subprocess
         result = subprocess.run(
-            [sys.executable, "run_inference.py", "--help"],
+            [sys.executable, "scripts/run_inference.py", "--help"],
             cwd=self.test_dir,
             capture_output=True,
             text=True

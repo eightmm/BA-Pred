@@ -33,12 +33,12 @@ jobs:
     
     - name: Type check with mypy
       run: |
-        mypy bapred --ignore-missing-imports || true
+        mypy src/bapred --ignore-missing-imports || true
     
     - name: Test with pytest
       run: |
-        pytest tests/ -v --cov=bapred --cov-report=xml || true
+        pytest tests/ -v --cov=src/bapred --cov-report=xml || true
     
     - name: Test CLI
       run: |
-        python run_inference.py --help
+        python scripts/run_inference.py --help

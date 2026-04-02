@@ -24,17 +24,30 @@ pip install bapred
 Run a prediction:
 
 ```bash
-python run_inference.py -r example/1KLT.pdb -l example/ligands.sdf -o results.csv
+bapred -r protein.pdb -l ligands.sdf -o results.tsv
 ```
 
-Predictions will be saved in `results.csv`.
+By default, the installed CLI uses the packaged `random_seed0` checkpoint.
+Predictions will be saved in `results.tsv`.
 
 ## Usage
 
-CLI:
+Installed CLI:
 
 ```bash
-python run_inference.py -r protein.pdb -l ligands.sdf -o results.csv
+bapred -r protein.pdb -l ligands.sdf -o results.tsv
+```
+
+Choose another packaged random checkpoint:
+
+```bash
+bapred -r protein.pdb -l ligands.sdf -o results.tsv --model random_seed1
+```
+
+From a source checkout:
+
+```bash
+python scripts/run_inference.py -r example/1KLT.pdb -l example/ligands.sdf -o results.tsv
 ```
 
 Python API:
@@ -45,10 +58,9 @@ from bapred.inference import inference
 inference(
     protein_pdb="example/1KLT.pdb",
     ligand_file="example/ligands.sdf",
-    output="results.csv",
+    output="results.tsv",
     batch_size=128,
-    ncpu=4,
-    model_path="bapred/weight",
+    model="random_seed0",
     device="cuda"
 )
 ```
@@ -57,23 +69,21 @@ inference(
 
 ```
 BA-Pred/
-├── bapred/                 # Main package
-│   ├── data/               # Data processing modules
-│   │   ├── atom_feature.py    # Atomic feature extraction
-│   │   ├── data.py           # Dataset handling
-│   │   └── utils.py          # Utility functions
-│   ├── model/              # Neural network models
-│   │   ├── GatedGCNLSPE.py   # Gated Graph Convolution
-│   │   └── model.py          # Main model wrapper
-│   ├── weight/             # Pre-trained weights
-│   │   └── BAPred.pth        # Model checkpoint
-│   └── inference.py       # Inference engine
+├── src/
+│   └── bapred/            # Main package
+│       ├── data/          # Data processing modules
+│       ├── model/         # Neural network models
+│       ├── weight/        # Packaged model weights and presets
+│       ├── weights.py     # Checkpoint preset definitions
+│       ├── cli.py         # Installed CLI entry point
+│       └── inference.py   # Inference engine
 ├── example/               # Example files
 │   ├── 1KLT.pdb             # Sample protein structure
 │   └── ligands.sdf          # Sample ligand library
-├── run_inference.py      # Easy-to-use script
-├── requirements.txt      # Python dependencies
-├── env.yaml             # Conda environment
+├── scripts/
+│   └── run_inference.py   # Source-tree inference wrapper
+├── requirements.txt       # Python dependencies
+├── pyproject.toml         # Package configuration
 └── README.md            # You are here!
 ```
 
