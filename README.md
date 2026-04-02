@@ -28,6 +28,7 @@ bapred -r protein.pdb -l ligands.sdf -o results.tsv
 ```
 
 By default, the installed CLI uses the packaged `random_seed0` checkpoint.
+Inference runs with the MHA path disabled unless `--use-mha` is set.
 Predictions will be saved in `results.tsv`.
 
 ## Usage
@@ -42,6 +43,12 @@ Choose another packaged random checkpoint:
 
 ```bash
 bapred -r protein.pdb -l ligands.sdf -o results.tsv --model random_seed1
+```
+
+Enable the MHA path explicitly:
+
+```bash
+bapred -r protein.pdb -l ligands.sdf -o results.tsv --use-mha
 ```
 
 From a source checkout:
@@ -61,7 +68,8 @@ inference(
     output="results.tsv",
     batch_size=128,
     model="random_seed0",
-    device="cuda"
+    device="cuda",
+    use_mha=False,
 )
 ```
 

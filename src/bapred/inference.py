@@ -45,6 +45,7 @@ def inference(
     model: str = DEFAULT_MODEL,
     model_path: str | None = None,
     device: Union[str, torch.device] = "cpu",
+    use_mha: bool = False,
 ) -> None:
     _set_reproducible_seed()
 
@@ -58,7 +59,7 @@ def inference(
         num_workers=0,
     )
 
-    model = PredictionPKD(57, 256, 13, 25, 20, 6, 0.2).to(resolved_device)
+    model = PredictionPKD(57, 256, 13, 25, 20, 6, 0.2, use_mha=use_mha).to(resolved_device)
     weight_path = _resolve_weight_file(model, model_path)
     checkpoint = torch.load(weight_path, map_location=resolved_device, weights_only=False)
     model.load_state_dict(checkpoint["model_state_dict"])

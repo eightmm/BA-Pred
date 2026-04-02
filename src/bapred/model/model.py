@@ -8,7 +8,17 @@ from dgl.nn.pytorch.glob import SumPooling
 from .GraphGPS import GraphGPS
 
 class PredictionPKD(nn.Module):
-    def __init__(self, in_size, emb_size, intra_edge_size, inter_edge_size, pose_size, num_layers, dropout_ratio=0.15):
+    def __init__(
+        self,
+        in_size,
+        emb_size,
+        intra_edge_size,
+        inter_edge_size,
+        pose_size,
+        num_layers,
+        dropout_ratio=0.15,
+        use_mha=True,
+    ):
         super(PredictionPKD, self).__init__()
         self.protein_node_encoder = nn.Linear( in_size, emb_size )
         self.protein_edge_encoder = nn.Linear( intra_edge_size,  emb_size )
@@ -28,7 +38,8 @@ class PredictionPKD(nn.Module):
                 [
                     GraphGPS(
                         emb_size,
-                        4
+                        4,
+                        use_mha=use_mha,
                     )
                     for _ in range(num_layers)
                 ]

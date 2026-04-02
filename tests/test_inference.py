@@ -54,6 +54,7 @@ class TestInference(unittest.TestCase):
         self.assertEqual(result.returncode, 0,
                         f"CLI help failed: {result.stderr}")
         self.assertIn("BA-Pred", result.stdout)
+        self.assertIn("--use-mha", result.stdout)
 
 if __name__ == "__main__":
     unittest.main()

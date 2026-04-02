@@ -6,8 +6,9 @@ from .GatedGCNLSPE import GatedGCNLSPELayer
 from .MHA import MultiHeadAttention
 
 class GraphGPS(nn.Module):
-    def __init__(self, emb_dim, num_heads):
+    def __init__(self, emb_dim, num_heads, use_mha=True):
         super(GraphGPS, self).__init__()
+        self.use_mha = use_mha
 
         self.mpnn_layer = GatedGCNLSPELayer(
             emb_dim,
@@ -47,15 +48,18 @@ class GraphGPS(nn.Module):
         p_i = p
 
         h_mpnn, p, e   = self.mpnn_layer(g, h, p, e)
-        h_mha, h_wight = self.mha_layer(h)
 
         h_mpnn += h_i
-        h_mha  += h_i
 
         h_mpnn = self.mpnn_bn(h_mpnn)
-        h_mha  = self.mha_bn(h_mha)
 
-        h_j = h_mpnn * self.mpnn_weight + h_mha * self.mha_weight
+        if self.use_mha:
+            h_mha, h_wight = self.mha_layer(h)
+            h_mha += h_i
+            h_mha = self.mha_bn(h_mha)
+            h_j = h_mpnn * self.mpnn_weight + h_mha * self.mha_weight
+        else:
+            h_j = h_mpnn * self.mpnn_weight
 
         h = self.MLP(h_j)
         h += h_j
