@@ -152,7 +152,21 @@ This project is licensed under the **Apache License 2.0**. See the [LICENSE](LIC
 
 ## Citation
 
-If you use BA-Pred in your research, please cite:
+If you use BA-Pred in your research, please cite the paper:
+
+```bibtex
+@article{Sim_2026,
+  title={BA-Pred and RMSD-Pred: Integrated Graph Neural Network Models for Accurate Protein-Ligand Binding Affinity and Binding Pose Prediction},
+  author={Sim, Jaemin and Lee, Juyong},
+  journal={Journal of Chemical Information and Modeling},
+  year={2026},
+  month={apr},
+  doi={10.1021/acs.jcim.5c02591},
+  url={https://doi.org/10.1021/acs.jcim.5c02591}
+}
+```
+
+If you want to cite the software repository as well, use:
 
 ```bibtex
 @software{bapred2024,
@@ -178,4 +192,3 @@ If you use BA-Pred in your research, please cite:
 Star us on GitHub if this project helped you!
 
 </div>
-
