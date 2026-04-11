@@ -106,14 +106,15 @@ def load_ligands(file_path, only_cluster_leads=True):
     if file_extension == '.txt':
         with open(file_path, 'r') as f:
             lines = [line.strip() for line in f if line.strip()]
-        lig_mols, err_tags, lig_names = [], [], []
+        lig_mols, err_tags, lig_names, adg_scores = [], [], [], []
         for line in lines:
             assert os.path.isfile(line), f"File not found: {line}"
-            file_ligands, file_err_tag, file_ligand_names, _ = process_ligand_file(line, only_cluster_leads=only_cluster_leads)
+            file_ligands, file_err_tag, file_ligand_names, file_adg = process_ligand_file(line, only_cluster_leads=only_cluster_leads)
             lig_mols.extend(file_ligands)
             err_tags.extend(file_err_tag)
             lig_names.extend(file_ligand_names)
-        return lig_mols, err_tags, lig_names
+            adg_scores.extend(file_adg)
+        return lig_mols, err_tags, lig_names, adg_scores
 
     elif file_extension in ['.sdf', '.mol2', '.dlg', '.pdbqt']:
         return process_ligand_file(file_path, only_cluster_leads=only_cluster_leads)
