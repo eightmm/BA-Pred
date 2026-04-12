@@ -270,7 +270,12 @@ class BAPredDataset(DGLDataset):
             if int( line[22:26] ) in select_residue[ line[21] ]:
                 total_lines += line
         
-        mol = Chem.MolFromPDBBlock( total_lines )
+        mol = Chem.MolFromPDBBlock( total_lines, sanitize=False, removeHs=False )
+        if mol is not None:
+            try:
+                Chem.SanitizeMol(mol, Chem.SanitizeFlags.SANITIZE_ALL ^ Chem.SanitizeFlags.SANITIZE_PROPERTIES)
+            except Exception:
+                pass
 
         return mol
 
