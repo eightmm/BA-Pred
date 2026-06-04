@@ -1,17 +1,16 @@
 import os
-import torch, dgl
+import torch
 from collections import defaultdict
 from rdkit import Chem, RDLogger
-from rdkit.Chem import AllChem
 RDLogger.DisableLog('rdApp.*')
 
-from dgl.data import DGLDataset
+from torch.utils.data import Dataset
+from torch_geometric.data import Data, Batch
+from torch_geometric.utils import scatter, to_torch_csr_tensor, to_edge_index, get_self_loop_attr
 
 from meeko import PDBQTMolecule, RDKitMolCreate
 
-
 from bapred.data.atom_feature import *
-
 
 
 def _process_dlg_pdbqt(file_path, is_dlg, only_cluster_leads=True):
@@ -50,8 +49,9 @@ def _process_dlg_pdbqt(file_path, is_dlg, only_cluster_leads=True):
 
 def _process_sdf(file_path):
     """Helper function to process .sdf files."""
-    supplier = Chem.SDMolSupplier(file_path)
+    supplier = Chem.SDMolSupplier(file_path, sanitize=False)
     return _process_supplier(supplier, file_path)
+
 
 def _process_mol2(file_path):
     """Helper function to process .mol2 files"""
@@ -59,10 +59,11 @@ def _process_mol2(file_path):
         mol2_data = f.read()
     mol2_blocks = mol2_data.split('@<TRIPOS>MOLECULE')
     supplier = (
-        Chem.MolFromMol2Block('@<TRIPOS>MOLECULE' + block)
+        Chem.MolFromMol2Block('@<TRIPOS>MOLECULE' + block, sanitize=False)
         for block in mol2_blocks[1:]
     )
     return _process_supplier(supplier, file_path)
+
 
 def _process_supplier(supplier, file_path):
     """Common logic for processing SDF and Mol2 suppliers."""
@@ -74,11 +75,12 @@ def _process_supplier(supplier, file_path):
             mol = Chem.RemoveHs(mol)
             ligands.append(mol)
             err_tag.append(0)
-            ligand_names.append(f"{base_name}_{idx}")
+            mol_name = mol.GetProp('_Name') if mol.HasProp('_Name') and mol.GetProp('_Name').strip() else base_name
+            ligand_names.append(f"{mol_name}_{idx}")
         else:
             ligands.append(None)
             err_tag.append(1)
-            ligand_names.append(f"{base_name}_{idx}")
+            ligand_names.append(f"{base_name}_err_{idx}")
 
     return ligands, err_tag, ligand_names, [float('nan')] * len(ligands)
 
@@ -122,90 +124,57 @@ def load_ligands(file_path, only_cluster_leads=True):
         raise ValueError("Unsupported file type. Use '.txt', '.sdf', '.mol2', '.dlg', or '.pdbqt'.")
 
 
-# def process_ligand_file(file_path):
-#     extension = os.path.splitext(file_path)[-1].lower()
+def random_walk_pe(edge_index, num_nodes, k):
+    """Self-return landing probabilities for 1..k steps (matches dgl.random_walk_pe).
 
-#     if extension == '.sdf':
-#         supplier = enumerate(Chem.SDMolSupplier(file_path))
-#     elif extension == '.mol2':
-#         with open(file_path, 'r') as f:
-#             mol2_data = f.read()
-#         mol2_blocks = mol2_data.split('@<TRIPOS>MOLECULE')
-#         supplier = enumerate(Chem.MolFromMol2Block('@<TRIPOS>MOLECULE' + block) for block in mol2_blocks[1:])
-#     else:
-#         raise ValueError(f"Unsupported file type: {extension}")
+    RW = D^{-1} A (row-normalized by src degree); PE[:, t] = diagonal(RW^{t+1}).
+    Sparse CSR implementation: molecular bond graphs are sparse/banded so RW^t
+    stays sparse (nnz << N^2) -- cheaper than the dense N^3 power iteration.
+    """
+    if edge_index.numel() == 0:
+        return torch.zeros(num_nodes, k).float()
 
-#     ligands = []
-#     err_tag = []
-#     ligand_names = []
-#     base_name = os.path.splitext(os.path.basename(file_path))[0]
+    row = edge_index[0]
+    # 1/deg(src), clamp(min=1) keeps isolated rows at 0 (no out-edges -> zero row)
+    deg = scatter(torch.ones(row.size(0)), row, dim_size=num_nodes, reduce='sum').clamp(min=1)
+    value = (1.0 / deg)[row]
 
-#     for idx, mol in supplier:
-#         if mol is not None:
-#             ligands.append(mol)
-#             err_tag.append(0)
-#             ligand_name = mol.GetProp('_Name')
-#             if ligand_name == '':
-#                 ligand_name = f"{base_name}_{idx}"
-#             ligand_names.append(ligand_name)
-#         else:
-#             ligands.append(None)
-#             err_tag.append(1)
-#             ligand_names.append(f"{base_name}_{idx}")
+    adj = to_torch_csr_tensor(edge_index, value, size=(num_nodes, num_nodes))
 
-#     return ligands, err_tag, ligand_names
+    def diag(out):
+        return get_self_loop_attr(*to_edge_index(out), num_nodes=num_nodes)
 
-# def load_ligands(file_path):
-#     lig_mols = []
-#     err_tags = []
-#     lig_names = []
-
-#     def process_single_file(line):
-#         assert os.path.isfile(line), f"File not found: {line}"
-#         return process_ligand_file(line)
-
-#     file_extension = os.path.splitext(file_path)[-1].lower()
-
-#     if file_extension == '.txt':
-#         with open(file_path, 'r') as f:
-#             lines = [line.strip() for line in f if line.strip()]
-
-#         for line in lines:
-#             file_ligands, file_err_tag, file_ligand_names = process_single_file(line)
-#             lig_mols.extend(file_ligands)
-#             err_tags.extend(file_err_tag)
-#             lig_names.extend(file_ligand_names)
-
-#     elif file_extension in ['.sdf', '.mol2']:
-#         lig_mols, err_tags, lig_names = process_single_file(file_path)
-
-#     else:
-#         raise ValueError("Unsupported file type. Use '.txt', '.sdf', or '.mol2'.")
-
-#     return lig_mols, err_tags, lig_names
+    out = adj
+    pe = [diag(out)]
+    for _ in range(k - 1):
+        out = out @ adj
+        pe.append(diag(out))
+    return torch.stack(pe, dim=-1).float()
 
 
-class BAPredDataset(DGLDataset):
+class BAPredDataset(Dataset):
+    """Protein-ligand binding affinity dataset producing torch_geometric Data graphs."""
+
     def __init__(self, protein_pdb, ligand_file, train=True, only_cluster_leads=True):
-        super(BAPredDataset, self).__init__(name='Protein Ligand Binding Affinity prediction')
-
-        self.lig_mols, self.err_tags, self.lig_names, _ = load_ligands(ligand_file, only_cluster_leads=only_cluster_leads)
-
-        self.prot_atom_line, self.prot_atom_coord = self.get_protein_info( protein_pdb )
+        super().__init__()
+        self.lig_mols, self.err_tags, self.lig_names, _ = load_ligands(
+            ligand_file, only_cluster_leads=only_cluster_leads
+        )
+        self.prot_atom_line, self.prot_atom_coord = self.get_protein_info(protein_pdb)
 
     def __getitem__(self, idx):
         name = self.lig_names[idx]
         if self.err_tags[idx] == 0:
             lmol = self.lig_mols[idx]
-            pmol = self.get_pocket_with_ligand_in_protein( self.prot_atom_line, self.prot_atom_coord, lmol )
-            gl = self.mol_to_graph( lmol )
-            gp = self.mol_to_graph( pmol )
-            gc = self.complex_to_graph( pmol, lmol )
+            pmol = self.get_pocket_with_ligand_in_protein(self.prot_atom_line, self.prot_atom_coord, lmol)
+            gl = self.mol_to_graph(lmol)
+            gp = self.mol_to_graph(pmol)
+            gc = self.complex_to_graph(pmol, lmol)
             error = 0
         else:
-            gp = self.prot_dummy_graph( num_nodes=1000)
-            gl = self.lig_dummy_graph( num_nodes=2 )
-            gc = self.comp_dummy_graph( num_nodes=1002 )
+            gp = self.prot_dummy_graph(num_nodes=1000)
+            gl = self.lig_dummy_graph(num_nodes=2)
+            gc = self.comp_dummy_graph(num_nodes=1002)
             error = 1
 
         return gp, gl, gc, error, idx, name
@@ -214,63 +183,67 @@ class BAPredDataset(DGLDataset):
         return len(self.lig_mols)
 
     def lig_dummy_graph(self, num_nodes):
-        src = torch.randint(0, num_nodes, (10,))
-        dst = torch.randint(0, num_nodes, (10,))
-        gl = dgl.graph( (src, dst), num_nodes=num_nodes)
-        gl.ndata['feats'] = torch.zeros((num_nodes, 57)).float()
-        gl.ndata['pos_enc'] = torch.zeros((num_nodes, 20)).float()
-        gl.ndata['coord'] = torch.randn((num_nodes, 3)).float()
-        gl.edata['feats'] = torch.zeros((10, 13)).float()
-        return gl
+        edge_index = torch.randint(0, num_nodes, (2, 10))
+        g = Data(
+            x=torch.zeros((num_nodes, 57)).float(),
+            edge_index=edge_index,
+            edge_attr=torch.zeros((10, 13)).float(),
+            pos_enc=torch.zeros((num_nodes, 20)).float(),
+            pos=torch.randn((num_nodes, 3)).float(),
+        )
+        g.num_nodes = num_nodes
+        return g
 
     def prot_dummy_graph(self, num_nodes):
-        src = torch.randint(0, num_nodes, (10,))
-        dst = torch.randint(0, num_nodes, (10,))
-        gp = dgl.graph( (src, dst), num_nodes=num_nodes)
-        gp.ndata['feats'] = torch.zeros((num_nodes, 57)).float()
-        gp.ndata['pos_enc'] = torch.zeros((num_nodes, 20)).float()
-        gp.ndata['coord'] = torch.randint(0, 100, (num_nodes, 3)).float()
-        gp.edata['feats'] = torch.zeros((10, 13)).float()
-        return gp
+        edge_index = torch.randint(0, num_nodes, (2, 10))
+        g = Data(
+            x=torch.zeros((num_nodes, 57)).float(),
+            edge_index=edge_index,
+            edge_attr=torch.zeros((10, 13)).float(),
+            pos_enc=torch.zeros((num_nodes, 20)).float(),
+            pos=torch.randint(0, 100, (num_nodes, 3)).float(),
+        )
+        g.num_nodes = num_nodes
+        return g
 
-    def comp_dummy_graph( self, num_nodes):
-        src = torch.randint(0, num_nodes, (10,))
-        dst = torch.randint(0, num_nodes, (10,))
-        gc = dgl.graph( (src, dst), num_nodes=num_nodes)
-        gc.ndata['coord'] = torch.randint(0, 100, (num_nodes, 3)).float()
-        gc.edata['feats'] = torch.zeros((10, 25)).float()
-        gc.edata['distance'] = torch.zeros((10, 1)).float()
-        return gc
+    def comp_dummy_graph(self, num_nodes):
+        edge_index = torch.randint(0, num_nodes, (2, 10))
+        g = Data(
+            edge_index=edge_index,
+            edge_attr=torch.zeros((10, 25)).float(),
+            distance=torch.zeros((10, 1)).float(),
+            pos=torch.randint(0, 100, (num_nodes, 3)).float(),
+        )
+        g.num_nodes = num_nodes
+        return g
 
-
-    def get_protein_info( self, prot_pdb ):
+    def get_protein_info(self, prot_pdb):
         prot_atom_line = []
         prot_atom_coord = []
         for line in open(prot_pdb).readlines():
             if line[0:4] in ['ATOM', 'HETA'] and 'H' not in line[12:14] and 'HOH' not in line[17:20]:
-                prot_atom_line.append( line )
-                prot_atom_coord.append( [ float(line[30:38]), float(line[38:46]), float(line[46:54]) ])
+                prot_atom_line.append(line)
+                prot_atom_coord.append([float(line[30:38]), float(line[38:46]), float(line[46:54])])
 
         return prot_atom_line, prot_atom_coord
 
-    def get_pocket_with_ligand_in_protein(self, prot_atom_line, prot_atom_coord, lig_mol ):
-        lig_atom_coord = torch.tensor( lig_mol.GetConformers()[0].GetPositions() ).float()
-        prot_atom_coord = torch.tensor( prot_atom_coord ).float()
+    def get_pocket_with_ligand_in_protein(self, prot_atom_line, prot_atom_coord, lig_mol):
+        lig_atom_coord = torch.tensor(lig_mol.GetConformers()[0].GetPositions()).float()
+        prot_atom_coord = torch.tensor(prot_atom_coord).float()
 
-        pl_distance = torch.cdist( prot_atom_coord, lig_atom_coord )
-        select_index = torch.where( pl_distance < 8 )[0]
-        select_atom = [ line for idx, line in enumerate( prot_atom_line ) if idx in select_index ]
+        pl_distance = torch.cdist(prot_atom_coord, lig_atom_coord)
+        select_index = set(torch.where(pl_distance < 8)[0].tolist())
 
         select_residue = defaultdict(set)
         for idx, line in enumerate(prot_atom_line):
             if idx in select_index:
-                select_residue[line[21]].add( int(line[22:26]) )
+                select_residue[line[21]].add(int(line[22:26]))
         total_lines = """"""
         for idx, line in enumerate(prot_atom_line):
-            if int( line[22:26] ) in select_residue[ line[21] ]:
+            if int(line[22:26]) in select_residue[line[21]]:
                 total_lines += line
-        
-        mol = Chem.MolFromPDBBlock( total_lines, sanitize=False, removeHs=False )
+
+        mol = Chem.MolFromPDBBlock(total_lines, sanitize=False, removeHs=False)
         if mol is not None:
             try:
                 Chem.SanitizeMol(mol, Chem.SanitizeFlags.SANITIZE_ALL ^ Chem.SanitizeFlags.SANITIZE_PROPERTIES)
@@ -279,57 +252,63 @@ class BAPredDataset(DGLDataset):
 
         return mol
 
-    def mol_to_graph( self, mol ):
-        n     = mol.GetNumAtoms()
+    def mol_to_graph(self, mol):
+        n = mol.GetNumAtoms()
         coord = get_mol_coordinate(mol)
-        h     = get_atom_feature(mol)
-        adj   = get_bond_feature(mol).to_sparse(sparse_dim=2)
+        h = get_atom_feature(mol)
+        edge_index, e = get_bond_feature(mol)
 
-        u = adj.indices()[0]
-        v = adj.indices()[1]
-        e = adj.values()
+        pos_enc = random_walk_pe(edge_index, n, 20)
 
-        g = dgl.DGLGraph()
-        g.add_nodes(n)
-        g.add_edges(u, v)
-
-        g.ndata['feats'] = h
-        g.ndata['coord'] = coord
-        g.edata['feats'] = e
-
-        g.ndata['pos_enc'] = dgl.random_walk_pe(g, 20)
-
+        g = Data(
+            x=h,
+            edge_index=edge_index,
+            edge_attr=e,
+            pos_enc=pos_enc,
+            pos=coord,
+        )
+        g.num_nodes = n
         return g
 
-    def complex_to_graph( self, pmol, lmol):
+    def complex_to_graph(self, pmol, lmol):
         pcoord = get_mol_coordinate(pmol)
         lcoord = get_mol_coordinate(lmol)
-        ccoord = torch.cat( [pcoord, lcoord] )
+        ccoord = torch.cat([pcoord, lcoord])
 
         npa = pmol.GetNumAtoms()
         nla = lmol.GetNumAtoms()
 
         distance = torch.cdist(pcoord, lcoord)
-        u, v = torch.where( distance < 5 ) ### u - src protein node, v - dst ligand node
+        u, v = torch.where(distance < 5)  # u - src protein node, v - dst ligand node
 
-        distance = distance[ u, v ].unsqueeze(-1)
+        distance = distance[u, v].unsqueeze(-1)
 
-        interact_feature = get_interact_feature( pmol, lmol, u, v  )
+        interact_feature = get_interact_feature(pmol, lmol, u, v)
         distance_feature = get_distance_feature(distance).squeeze(-1)
 
-        e = torch.cat( [interact_feature, distance_feature], dim=1)
-        e = torch.cat( [e, e] )
+        e = torch.cat([interact_feature, distance_feature], dim=1)
+        e = torch.cat([e, e])
 
-        distance = torch.cat( [ distance, distance] )
+        distance = torch.cat([distance, distance])
 
-        u, v = torch.cat( [u, v+npa] ), torch.cat( [v+npa, u] )
+        u, v = torch.cat([u, v + npa]), torch.cat([v + npa, u])
 
-        g = dgl.DGLGraph()
-        g.add_nodes( npa + nla )
-        g.add_edges( u, v )
-
-        g.ndata['coord'] = ccoord
-        g.edata['feats'] = e
-        g.edata['distance'] = distance
-
+        g = Data(
+            edge_index=torch.stack([u, v], dim=0),
+            edge_attr=e,
+            distance=distance,
+            pos=ccoord,
+        )
+        g.num_nodes = npa + nla
         return g
+
+
+def collate_pyg(samples):
+    """Batch a list of (gp, gl, gc, error, idx, name) into PyG Batch objects."""
+    gps, gls, gcs, errors, idxs, names = zip(*samples)
+    bgp = Batch.from_data_list(list(gps))
+    bgl = Batch.from_data_list(list(gls))
+    bgc = Batch.from_data_list(list(gcs))
+    errors = torch.tensor(errors)
+    idxs = torch.tensor(idxs)
+    return bgp, bgl, bgc, errors, idxs, list(names)

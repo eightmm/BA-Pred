@@ -1,9 +1,11 @@
-import dgl, torch
+import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from .GatedGCNLSPE import GatedGCNLSPELayer
 from .MHA import MultiHeadAttention
+
+"""GraphGPS block (PyG implementation)."""
+
 
 class GraphGPS(nn.Module):
     def __init__(self, emb_dim, num_heads):
@@ -18,7 +20,7 @@ class GraphGPS(nn.Module):
             residual=True
         )
 
-        self.mha_layer  = MultiHeadAttention(
+        self.mha_layer = MultiHeadAttention(
             emb_dim,
             num_heads
         )
@@ -35,16 +37,16 @@ class GraphGPS(nn.Module):
         )
 
         self.mpnn_bn = nn.BatchNorm1d(emb_dim)
-        self.mha_bn  = nn.BatchNorm1d(emb_dim)
-        self.mlp_bn  = nn.BatchNorm1d(emb_dim)
+        self.mha_bn = nn.BatchNorm1d(emb_dim)
+        self.mlp_bn = nn.BatchNorm1d(emb_dim)
 
-        self.mpnn_weight = nn.Parameter( torch.tensor( [1.0] ) )
-        self.mha_weight  = nn.Parameter( torch.tensor( [1.0] ) )
+        self.mpnn_weight = nn.Parameter(torch.tensor([1.0]))
+        self.mha_weight = nn.Parameter(torch.tensor([1.0]))
 
-    def forward(self, g, h, p, e):
+    def forward(self, edge_index, h, p, e):
         h_i = h
 
-        h_mpnn, p, e = self.mpnn_layer(g, h, p, e)
+        h_mpnn, p, e = self.mpnn_layer(edge_index, h, p, e)
 
         # MHA is broken (returns input unchanged in eval mode), skip for inference
         if self.training:
@@ -53,10 +55,10 @@ class GraphGPS(nn.Module):
             h_mha = h
 
         h_mpnn += h_i
-        h_mha  += h_i
+        h_mha += h_i
 
         h_mpnn = self.mpnn_bn(h_mpnn)
-        h_mha  = self.mha_bn(h_mha)
+        h_mha = self.mha_bn(h_mha)
 
         h_j = h_mpnn * self.mpnn_weight + h_mha * self.mha_weight
 
