@@ -1,4 +1,6 @@
-import torch, math
+import math
+
+import torch
 import torch.nn.functional as F
 
 class MultiHeadAttention(torch.nn.Module):

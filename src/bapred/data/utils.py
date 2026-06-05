@@ -1,4 +1,6 @@
-import torch, pickle
+import pickle
+
+import torch
 
 def load_obj(name):
     with open(name, 'rb') as f:

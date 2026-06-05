@@ -1,16 +1,22 @@
 import os
-import torch
 from collections import defaultdict
-from rdkit import Chem, RDLogger
-RDLogger.DisableLog('rdApp.*')
 
+import torch
+from rdkit import Chem, RDLogger
 from torch.utils.data import Dataset
 from torch_geometric.data import Data, Batch
 from torch_geometric.utils import scatter, to_torch_csr_tensor, to_edge_index, get_self_loop_attr
-
 from meeko import PDBQTMolecule, RDKitMolCreate
 
-from bapred.data.atom_feature import *
+from bapred.data.atom_feature import (
+    get_mol_coordinate,
+    get_atom_feature,
+    get_bond_feature,
+    get_interact_feature,
+    get_distance_feature,
+)
+
+RDLogger.DisableLog('rdApp.*')
 
 
 def _process_dlg_pdbqt(file_path, is_dlg, only_cluster_leads=True):

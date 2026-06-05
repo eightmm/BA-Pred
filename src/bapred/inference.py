@@ -21,9 +21,13 @@ def inference(protein_pdb, ligand_file, output, batch_size, weight=DEFAULT_WEIGH
         num_workers=num_workers, persistent_workers=(num_workers > 0)
     )
 
-    model = PredictionPKD(57, 256, 13, 25, 20, 6, 0.2).to(device)
-    model.load_state_dict(torch.load(weight, map_location=device, weights_only=False)['model_state_dict'])
-    model.train(False)  # eval mode
+    weights = [weight] if isinstance(weight, str) else list(weight)
+    models = []
+    for w in weights:
+        m = PredictionPKD(57, 256, 13, 25, 20, 6, 0.2).to(device)
+        m.load_state_dict(torch.load(w, map_location=device, weights_only=False)['model_state_dict'])
+        m.train(False)  # eval mode
+        models.append(m)
 
     results = {"Name": [], "pKd": [], "Kcal/mol": []}
 
@@ -34,7 +38,8 @@ def inference(protein_pdb, ligand_file, output, batch_size, weight=DEFAULT_WEIGH
             bgp, bgl, bgc, error, idx, name = data
             bgp, bgl, bgc = bgp.to(device), bgl.to(device), bgc.to(device)
 
-            pkd = model(bgp, bgl, bgc).view(-1)
+            # ensemble: mean prediction across weights (single weight -> unchanged)
+            pkd = torch.stack([m(bgp, bgl, bgc).view(-1) for m in models], dim=0).mean(dim=0)
             pkd[error == 1] = float('nan')
 
             results["Name"].extend(str(item) for item in name)
@@ -61,10 +66,15 @@ def main():
     parser.add_argument('--ncpu', default=4, type=int, help='Number of CPU workers (default: 4)')
     parser.add_argument('--device', type=str, default='cuda', choices=['cpu', 'cuda'],
                         help='Compute device: cpu or cuda (default: cuda)')
-    parser.add_argument('--weight', type=str, default=DEFAULT_WEIGHT,
-                        help='Model weight file (default: packaged cutoff8_seed0)')
+    parser.add_argument('--weight', type=str, nargs='+', default=[DEFAULT_WEIGHT],
+                        help='Model weight file(s); multiple are ensembled by mean (default: packaged cutoff8_seed0)')
 
     args = parser.parse_args()
+
+    assert os.path.isfile(args.protein_pdb), f"Protein PDB not found: {args.protein_pdb}"
+    assert os.path.isfile(args.ligand_file), f"Ligand file not found: {args.ligand_file}"
+    for w in args.weight:
+        assert os.path.isfile(w), f"Weight file not found: {w}"
 
     os.environ["OMP_NUM_THREADS"] = str(args.ncpu)
     os.environ["MKL_NUM_THREADS"] = str(args.ncpu)

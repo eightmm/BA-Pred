@@ -157,3 +157,7 @@ output/
 temp/
 tmp/
 .omc/
+
+# Local-only weights (not packaged/distributed)
+src/bapred/weight/clean/
+src/bapred/weight/lp/

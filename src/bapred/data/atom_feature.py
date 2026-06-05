@@ -2,7 +2,7 @@ import torch
 
 from rdkit import Chem
 
-from .utils import one_hot, is_one
+from .utils import one_hot
 
 METAL =["LI","NA","K","RB","CS","MG","TL","CU","AG","BE","NI","PT","ZN","CO",\
         "PD","AG","CR","FE","V","MN","HG",'GA',"CD","YB","CA","SN","PB","EU",\
