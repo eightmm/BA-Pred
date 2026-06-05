@@ -165,19 +165,20 @@ class BAPredDataset(Dataset):
     def __getitem__(self, idx):
         name = self.lig_names[idx]
         if self.err_tags[idx] == 0:
-            lmol = self.lig_mols[idx]
-            pmol = self.get_pocket_with_ligand_in_protein(self.prot_atom_line, self.prot_atom_coord, lmol)
-            gl = self.mol_to_graph(lmol)
-            gp = self.mol_to_graph(pmol)
-            gc = self.complex_to_graph(pmol, lmol)
-            error = 0
-        else:
-            gp = self.prot_dummy_graph(num_nodes=1000)
-            gl = self.lig_dummy_graph(num_nodes=2)
-            gc = self.comp_dummy_graph(num_nodes=1002)
-            error = 1
+            try:
+                lmol = self.lig_mols[idx]
+                pmol = self.get_pocket_with_ligand_in_protein(self.prot_atom_line, self.prot_atom_coord, lmol)
+                gl = self.mol_to_graph(lmol)
+                gp = self.mol_to_graph(pmol)
+                gc = self.complex_to_graph(pmol, lmol)
+                return gp, gl, gc, 0, idx, name
+            except Exception:
+                pass  # parsed but graph build failed -> emit dummy, flag as error
 
-        return gp, gl, gc, error, idx, name
+        gp = self.prot_dummy_graph(num_nodes=1000)
+        gl = self.lig_dummy_graph(num_nodes=2)
+        gc = self.comp_dummy_graph(num_nodes=1002)
+        return gp, gl, gc, 1, idx, name
 
     def __len__(self):
         return len(self.lig_mols)

@@ -5,8 +5,8 @@
 **Protein-Ligand Binding Affinity Prediction using Graph Neural Networks**
 
 [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![PyTorch](https://img.shields.io/badge/PyTorch-2.4-orange.svg)](https://pytorch.org/)
-[![DGL](https://img.shields.io/badge/DGL-2.4-green.svg)](https://www.dgl.ai/)
+[![PyTorch](https://img.shields.io/badge/PyTorch-2.7+-orange.svg)](https://pytorch.org/)
+[![PyG](https://img.shields.io/badge/PyG-2.7+-green.svg)](https://pyg.org/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![CASP16](https://img.shields.io/badge/CASP16-2nd%20Place-gold.svg)](https://predictioncenter.org/casp16/)
 [![GitHub stars](https://img.shields.io/github/stars/eightmm/BA-Pred.svg?style=social&label=Star)](https://github.com/eightmm/BA-Pred)
@@ -20,6 +20,10 @@
 ```bash
 pip install bapred
 ```
+
+> **GPU (incl. NVIDIA Blackwell / sm_120):** install a CUDA build of PyTorch.
+> From a checkout, `uv sync` uses the bundled CUDA 12.8 index. With pip:
+> `pip install torch --index-url https://download.pytorch.org/whl/cu128`
 
 Run a prediction:
 
@@ -85,7 +89,7 @@ BA-Pred/
 
 ### Input
 - **Protein**: PDB format (`.pdb`)
-- **Ligands**: SDF (`.sdf`), MOL2 (`.mol2`), or text file with paths (`.txt`)
+- **Ligands**: SDF (`.sdf`), MOL2 (`.mol2`), AutoDock (`.dlg`, `.pdbqt`), or text file with paths (`.txt`)
 
 ### Output
 - **CSV/TSV file** with columns:
