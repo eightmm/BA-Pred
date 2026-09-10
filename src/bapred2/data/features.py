@@ -5,6 +5,7 @@ from typing import Iterable
 
 import torch
 from rdkit import Chem
+from torch_geometric.utils import get_self_loop_attr, scatter, to_edge_index, to_torch_csr_tensor
 
 ELEMENTS = ["C", "N", "O", "S", "P", "F", "Cl", "Br", "I", "B", "Si", "Se", "METAL", "OTHER"]
 METALS = {
@@ -88,16 +89,21 @@ def random_walk_pe(edge_index: torch.Tensor, num_nodes: int, k: int) -> torch.Te
         return torch.zeros((0, k), dtype=torch.float32)
     if edge_index.numel() == 0:
         return torch.zeros((num_nodes, k), dtype=torch.float32)
-    adj = torch.zeros((num_nodes, num_nodes), dtype=torch.float32)
-    adj[edge_index[0], edge_index[1]] = 1.0
-    deg = adj.sum(-1, keepdim=True).clamp_min(1.0)
-    rw = adj / deg
-    out = rw
-    pe = [torch.diagonal(out)]
+    row = edge_index[0]
+    deg = scatter(torch.ones(row.size(0), dtype=torch.float32), row, dim=0, dim_size=num_nodes, reduce="sum").clamp_min(1.0)
+    value = (1.0 / deg)[row]
+    adj = to_torch_csr_tensor(edge_index, value, size=(num_nodes, num_nodes))
+
+    def diagonal(sparse_matrix):
+        ei, ev = to_edge_index(sparse_matrix)
+        return get_self_loop_attr(ei, ev, num_nodes=num_nodes)
+
+    out = adj
+    pe = [diagonal(out)]
     for _ in range(k - 1):
-        out = out @ rw
-        pe.append(torch.diagonal(out))
-    return torch.stack(pe, dim=-1)
+        out = out @ adj
+        pe.append(diagonal(out))
+    return torch.stack(pe, dim=-1).float()
 
 
 def atom_property_masks(mol: Chem.Mol, atom_indices: list[int] | None = None) -> torch.Tensor:
