@@ -2,6 +2,8 @@
 
 Experimental successor to BA-Pred using **recurrent graph inference** for protein-ligand binding-affinity prediction.
 
+> Full architecture, data, training, equivariance, stability, and ablation plan: **[SPEC.md](SPEC.md)**
+
 ## Core idea
 
 Instead of stacking independent GNN layers, BA-Pred2 learns one shared binding-inference operator and repeatedly applies it:
